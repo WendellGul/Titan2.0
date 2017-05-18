@@ -8,7 +8,6 @@ import com.thinkaurelius.titan.graphdb.internal.RelationCategory;
 import com.thinkaurelius.titan.graphdb.query.BackendQueryHolder;
 import com.thinkaurelius.titan.graphdb.query.QueryProcessor;
 import com.thinkaurelius.titan.graphdb.query.profile.QueryProfiler;
-import com.thinkaurelius.titan.graphdb.vertices.PreloadedVertex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +57,7 @@ public class VertexCentricQueryBuilder extends BasicVertexCentricQueryBuilder<Ve
     protected<Q> Q execute(RelationCategory returnType, ResultConstructor<Q> resultConstructor) {
         BaseVertexCentricQuery bq = super.constructQuery(returnType);
         if (bq.isEmpty()) return resultConstructor.emptyResult();
-        if (returnType==RelationCategory.PROPERTY && hasSingleType() && !hasQueryOnlyLoaded()
+        if (returnType== RelationCategory.PROPERTY && hasSingleType() && !hasQueryOnlyLoaded()
                 && tx.getConfiguration().hasPropertyPrefetching()) {
             //Preload properties
             vertex.query().properties().iterator().hasNext();

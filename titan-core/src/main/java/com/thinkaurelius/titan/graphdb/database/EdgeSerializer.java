@@ -6,10 +6,8 @@ import com.carrotsearch.hppc.LongHashSet;
 import com.carrotsearch.hppc.LongSet;
 import com.google.common.base.Preconditions;
 import com.thinkaurelius.titan.core.*;
-import com.thinkaurelius.titan.diskstorage.Entry;
-import com.thinkaurelius.titan.diskstorage.EntryMetaData;
-import com.thinkaurelius.titan.diskstorage.ReadBuffer;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.diskstorage.util.BufferUtil;
 import com.thinkaurelius.titan.diskstorage.util.StaticArrayEntry;
@@ -18,10 +16,10 @@ import com.thinkaurelius.titan.graphdb.database.idhandling.VariableLong;
 import com.thinkaurelius.titan.graphdb.database.serialize.AttributeUtil;
 import com.thinkaurelius.titan.graphdb.database.serialize.DataOutput;
 import com.thinkaurelius.titan.graphdb.database.serialize.Serializer;
-import com.thinkaurelius.titan.graphdb.database.serialize.attribute.LongSerializer;
 import com.thinkaurelius.titan.graphdb.internal.*;
 import com.thinkaurelius.titan.graphdb.relations.EdgeDirection;
 import com.thinkaurelius.titan.graphdb.relations.RelationCache;
+import com.thinkaurelius.titan.graphdb.types.TypeDefinitionDescription;
 import com.thinkaurelius.titan.graphdb.types.TypeInspector;
 import com.thinkaurelius.titan.graphdb.types.system.ImplicitKey;
 import com.thinkaurelius.titan.util.datastructures.Interval;
@@ -32,9 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Map;
 
-import static com.thinkaurelius.titan.graphdb.database.idhandling.IDHandler.DirectionID;
-import static com.thinkaurelius.titan.graphdb.database.idhandling.IDHandler.RelationTypeParse;
-import static com.thinkaurelius.titan.graphdb.database.idhandling.IDHandler.getBounds;
+import static com.thinkaurelius.titan.graphdb.database.idhandling.IDHandler.*;
 
 /**
  * @author Matthias Broecheler (me@matthiasb.com)
@@ -55,6 +51,15 @@ public class EdgeSerializer implements RelationReader {
     }
 
     public RelationCache readRelation(Entry data, boolean parseHeaderOnly, TypeInspector tx) {
+        RelationCache map = data.getCache();
+        if (map == null || !(parseHeaderOnly || map.hasProperties())) {
+            map = parseRelation(data, parseHeaderOnly, tx);
+            data.setCache(map);
+        }
+        return map;
+    }
+
+    public RelationCache readRelation(MyEntry data, boolean parseHeaderOnly, TypeInspector tx) {
         RelationCache map = data.getCache();
         if (map == null || !(parseHeaderOnly || map.hasProperties())) {
             map = parseRelation(data, parseHeaderOnly, tx);
@@ -149,6 +154,70 @@ public class EdgeSerializer implements RelationReader {
                 Object pvalue = readInline(in, type, InlineType.NORMAL);
                 assert pvalue != null;
                 properties.put(type.longId(), pvalue);
+            }
+
+            if (data.hasMetaData()) {
+                for (Map.Entry<EntryMetaData,Object> metas : data.getMetaData().entrySet()) {
+                    ImplicitKey key = ImplicitKey.MetaData2ImplicitKey.get(metas.getKey());
+                    if (key!=null) {
+                        assert metas.getValue()!=null;
+                        properties.put(key.longId(),metas.getValue());
+                    }
+                }
+            }
+        }
+
+        return new RelationCache(dir, typeId, relationId, other, properties);
+    }
+
+    @Override
+    public RelationCache parseRelation(MyEntry data, boolean excludeProperties, TypeInspector tx) {
+
+        LongObjectHashMap properties = excludeProperties ? null : new LongObjectHashMap(4);
+        RelationTypeParse typeAndDir = IDHandler.readRelationType(data);
+
+        long typeId = typeAndDir.typeId;
+        Direction dir = typeAndDir.dirID.getDirection();
+        RelationCategory rtype = typeAndDir.dirID.getRelationCategory();
+
+        RelationType relationType = tx.getExistingRelationType(typeId);
+        InternalRelationType def = (InternalRelationType) relationType;
+        Multiplicity multiplicity = def.multiplicity();
+        long[] keysig = def.getSortKey();
+
+        long relationId;
+        Object other;
+        if(data instanceof PropertyEntry) {
+            other = ((PropertyEntry) data).getPropertyValue();
+            relationId = -1;
+        }
+        else {
+            other = ((EdgeEntry) data).getOtherVertexId();
+            relationId = ((EdgeEntry) data).getEdgeId();
+        }
+
+        if (!excludeProperties && !multiplicity.isConstrained() && keysig.length>0) {
+            if(data instanceof EdgeEntry) {
+                for (Map.Entry<Long, Object> e : ((EdgeEntry) data).getSortKeys().entrySet()) {
+                    properties.put(e.getKey(), e.getValue());
+                }
+            }
+        }
+
+        if (!excludeProperties) {
+            //read value signature
+            for (Map.Entry<Long, Object> e : data.getSignatures().entrySet()) {
+                properties.put(e.getKey(), e.getValue());
+            }
+
+            //Third: read rest
+            if (data.hasRemaining()) {
+                if(data instanceof EdgeEntry) {
+                    for (PropertyEntry p : ((EdgeEntry) data).getProperties())
+                        properties.put(p.getColumn(), p.getPropertyValue());
+                }
+                else
+                    properties.put(2277L, new TypeDefinitionDescription(((PropertyEntry) data).getPropertyTypeValue(), null));
             }
 
             if (data.hasMetaData()) {
@@ -480,6 +549,34 @@ public class EdgeSerializer implements RelationReader {
             }
         }
         return new SliceQuery(sliceStart, sliceEnd);
+    }
+
+    public EdgeSliceQuery getEdgeQuery(RelationCategory resultType, boolean querySystemTypes) {
+        Preconditions.checkNotNull(resultType);
+        int[] bound = getEdgeBounds(resultType, querySystemTypes);
+        return new EdgeSliceQuery(bound[0], bound[1]);
+    }
+
+    public EdgeSliceQuery getEdgeQuery(InternalRelationType type, Direction dir) {
+
+        Preconditions.checkNotNull(type);
+        Preconditions.checkNotNull(dir);
+        Preconditions.checkArgument(type.isUnidirected(Direction.BOTH) || type.isUnidirected(dir));
+
+        EdgeSliceQuery.Slice sliceStart = null, sliceEnd = null;
+        RelationCategory rt = type.isPropertyKey() ? RelationCategory.PROPERTY : RelationCategory.EDGE;
+        if (dir == Direction.BOTH) {
+            assert type.isEdgeLabel();
+            sliceStart = new EdgeSliceQuery.Slice(type.longId(), getDirID(Direction.OUT, rt).getId());
+            sliceEnd = new EdgeSliceQuery.Slice(type.longId(), getDirID(Direction.IN, rt).getId());
+            assert sliceStart.compareTo(sliceEnd) < 0;
+            sliceEnd = EdgeSliceQuery.nextSlice(sliceEnd);
+        } else {
+            sliceStart = new EdgeSliceQuery.Slice(type.longId(), getDirID(dir, rt).getId());
+            sliceEnd = EdgeSliceQuery.nextSlice(sliceStart);
+        }
+
+        return new EdgeSliceQuery(sliceStart, sliceEnd);
     }
 
     public static class TypedInterval {

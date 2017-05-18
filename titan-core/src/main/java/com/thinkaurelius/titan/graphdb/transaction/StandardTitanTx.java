@@ -14,11 +14,14 @@ import com.thinkaurelius.titan.core.schema.*;
 import com.thinkaurelius.titan.core.schema.SchemaInspector;
 import com.thinkaurelius.titan.diskstorage.BackendException;
 
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.util.time.TimestampProvider;
 import com.thinkaurelius.titan.diskstorage.BackendTransaction;
 import com.thinkaurelius.titan.diskstorage.EntryList;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.graphdb.query.profile.QueryProfiler;
+import com.thinkaurelius.titan.graphdb.query.vertex.*;
 import com.thinkaurelius.titan.graphdb.relations.RelationComparator;
 import com.thinkaurelius.titan.graphdb.tinkerpop.TitanBlueprintsTransaction;
 import com.thinkaurelius.titan.graphdb.database.EdgeSerializer;
@@ -34,9 +37,6 @@ import com.thinkaurelius.titan.graphdb.query.graph.GraphCentricQuery;
 import com.thinkaurelius.titan.graphdb.query.graph.GraphCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.query.graph.IndexQueryBuilder;
 import com.thinkaurelius.titan.graphdb.query.graph.JointIndexQuery;
-import com.thinkaurelius.titan.graphdb.query.vertex.MultiVertexCentricQueryBuilder;
-import com.thinkaurelius.titan.graphdb.query.vertex.VertexCentricQuery;
-import com.thinkaurelius.titan.graphdb.query.vertex.VertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.relations.RelationIdentifier;
 import com.thinkaurelius.titan.graphdb.relations.StandardEdge;
 import com.thinkaurelius.titan.graphdb.relations.StandardVertexProperty;
@@ -244,9 +244,11 @@ public class StandardTitanTx extends TitanBlueprintsTransaction implements TypeI
             MetricManager.INSTANCE.getCounter(config.getGroupName(), "tx", "begin").inc();
             elementProcessor = new MetricsQueryExecutor<GraphCentricQuery, TitanElement, JointIndexQuery>(config.getGroupName(), "graph", elementProcessorImpl);
             edgeProcessor    = new MetricsQueryExecutor<VertexCentricQuery, TitanRelation, SliceQuery>(config.getGroupName(), "vertex", edgeProcessorImpl);
+            edgeProcessor_   = new MetricsQueryExecutor<MyVertexCentricQuery, TitanRelation, EdgeSliceQuery>(config.getGroupName(), "vertex", edgeProcessorImpl_);
         } else {
             elementProcessor = elementProcessorImpl;
             edgeProcessor    = edgeProcessorImpl;
+            edgeProcessor_   = edgeProcessorImpl_;
         }
     }
 
@@ -400,7 +402,7 @@ public class StandardTitanTx extends TitanBlueprintsTransaction implements TypeI
         }
         if (!vids.isEmpty()) {
             if (externalVertexRetriever.hasVerifyExistence()) {
-                List<EntryList> existence = graph.edgeMultiQuery(vids,graph.vertexExistenceQuery,txHandle);
+                List<MyEntryList> existence = graph.edgeMultiQuery(vids, graph.vertexExistenceQuery_, txHandle);
                 for (int i = 0; i < vids.size(); i++) {
                     if (!existence.get(i).isEmpty()) {
                         long id = vids.get(i);
@@ -1004,6 +1006,10 @@ public class StandardTitanTx extends TitanBlueprintsTransaction implements TypeI
         return new VertexCentricQueryBuilder(((InternalVertex) vertex).it());
     }
 
+    public MyVertexCentricQueryBuilder myQuery(TitanVertex vertex) {
+        return new MyVertexCentricQueryBuilder(((InternalVertex) vertex).it());
+    }
+
     @Override
     @Deprecated
     public TitanMultiVertexQuery multiQuery(TitanVertex... vertices) {
@@ -1044,7 +1050,33 @@ public class StandardTitanTx extends TitanBlueprintsTransaction implements TypeI
         }
     }
 
+    public void executeMultiQuery(final Collection<InternalVertex> vertices, final EdgeSliceQuery sq, final QueryProfiler profiler) {
+        LongArrayList vids = new LongArrayList(vertices.size());
+        for (InternalVertex v : vertices) {
+            if (!v.isNew() && v.hasId() && (v instanceof CacheVertex) && !v.hasLoadedRelations(sq)) vids.add(v.longId());
+        }
+
+        if (!vids.isEmpty()) {
+            List<MyEntryList> results = QueryProfiler.profile(profiler, sq, true, q -> graph.edgeMultiQuery(vids, q, txHandle));
+            int pos = 0;
+            for (TitanVertex v : vertices) {
+                if (pos<vids.size() && vids.get(pos) == v.longId()) {
+                    final MyEntryList vresults = results.get(pos);
+                    ((CacheVertex) v).loadRelations(sq, new Retriever<EdgeSliceQuery, MyEntryList>() {
+                        @Override
+                        public MyEntryList get(EdgeSliceQuery query) {
+                            return vresults;
+                        }
+                    });
+                    pos++;
+                }
+            }
+        }
+    }
+
     public final QueryExecutor<VertexCentricQuery, TitanRelation, SliceQuery> edgeProcessor;
+
+    public final QueryExecutor<MyVertexCentricQuery, TitanRelation, EdgeSliceQuery> edgeProcessor_;
 
     public final QueryExecutor<VertexCentricQuery, TitanRelation, SliceQuery> edgeProcessorImpl = new QueryExecutor<VertexCentricQuery, TitanRelation, SliceQuery>() {
         @Override
@@ -1120,6 +1152,82 @@ public class StandardTitanTx extends TitanBlueprintsTransaction implements TypeI
             return RelationConstructor.readRelation(v, iter, StandardTitanTx.this).iterator();
         }
     };
+
+    public final QueryExecutor<MyVertexCentricQuery, TitanRelation, EdgeSliceQuery> edgeProcessorImpl_ = new QueryExecutor<MyVertexCentricQuery, TitanRelation, EdgeSliceQuery>() {
+        @Override
+        public Iterator<TitanRelation> getNew(final MyVertexCentricQuery query) {
+            InternalVertex vertex = query.getVertex();
+            if (vertex.isNew() || vertex.hasAddedRelations()) {
+                return (Iterator) vertex.getAddedRelations(new Predicate<InternalRelation>() {
+                    //Need to filter out self-loops if query only asks for one direction
+
+                    private TitanRelation previous = null;
+
+                    @Override
+                    public boolean apply(@Nullable InternalRelation relation) {
+                        if ((relation instanceof TitanEdge) && relation.isLoop()
+                                && query.getDirection() != Direction.BOTH) {
+                            if (relation.equals(previous))
+                                return false;
+
+                            previous = relation;
+                        }
+
+                        return query.matches(relation);
+                    }
+                }).iterator();
+            } else {
+                return Collections.emptyIterator();
+            }
+        }
+
+        @Override
+        public boolean hasDeletions(MyVertexCentricQuery query) {
+            InternalVertex vertex = query.getVertex();
+            if (vertex.isNew()) return false;
+            //In addition to deleted, we need to also check for added relations since those can potentially
+            //replace existing ones due to a multiplicity constraint
+            if (vertex.hasRemovedRelations() || vertex.hasAddedRelations()) return true;
+            return false;
+        }
+
+        @Override
+        public boolean isDeleted(MyVertexCentricQuery query, TitanRelation result) {
+            if (deletedRelations.containsKey(result.longId()) || result != ((InternalRelation) result).it()) return true;
+            //Check if this relation is replaced by an added one due to a multiplicity constraint
+            InternalRelationType type = (InternalRelationType)result.getType();
+            InternalVertex vertex = query.getVertex();
+            if (type.multiplicity().isConstrained() && vertex.hasAddedRelations()) {
+                final RelationComparator comparator = new RelationComparator(vertex);
+                if (!Iterables.isEmpty(vertex.getAddedRelations(new Predicate<InternalRelation>() {
+                    @Override
+                    public boolean apply(@Nullable InternalRelation internalRelation) {
+                        return comparator.compare((InternalRelation)result,internalRelation)==0;
+                    }
+                }))) return true;
+            }
+            return false;
+        }
+
+        @Override
+        public Iterator<TitanRelation> execute(final MyVertexCentricQuery query, final EdgeSliceQuery sq, final Object exeInfo, final QueryProfiler profiler) {
+            assert exeInfo==null;
+            if (query.getVertex().isNew())
+                return Collections.emptyIterator();
+
+            final InternalVertex v = query.getVertex();
+
+            MyEntryList iter = v.loadRelations(sq, new Retriever<EdgeSliceQuery, MyEntryList>() {
+                @Override
+                public MyEntryList get(EdgeSliceQuery query) {
+                    return QueryProfiler.profile(profiler,query, q -> graph.myEdgeQuery(v.longId(), q, txHandle));
+                }
+            });
+
+            return RelationConstructor.myReadRelation(v, iter, StandardTitanTx.this).iterator();
+        }
+    };
+
 
     public final QueryExecutor<GraphCentricQuery, TitanElement, JointIndexQuery> elementProcessor;
 

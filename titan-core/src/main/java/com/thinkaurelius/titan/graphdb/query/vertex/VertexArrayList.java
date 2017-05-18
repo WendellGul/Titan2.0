@@ -94,7 +94,7 @@ public class VertexArrayList implements VertexListInternal {
                 ((VertexLongList)vertexlist).toVertexArrayList();
         if (sorted && other.isSorted()) {
             //Merge sort
-            vertices = (ArrayList)IterablesUtil.mergeSort(vertices, other.vertices, VERTEX_ID_COMPARATOR);
+            vertices = (ArrayList) IterablesUtil.mergeSort(vertices, other.vertices, VERTEX_ID_COMPARATOR);
         } else {
             sorted = false;
             vertices.addAll(other.vertices);

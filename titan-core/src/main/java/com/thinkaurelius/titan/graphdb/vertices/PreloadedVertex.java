@@ -5,6 +5,8 @@ import com.google.common.base.Predicate;
 import com.thinkaurelius.titan.core.TitanEdge;
 import com.thinkaurelius.titan.core.TitanVertexProperty;
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.graphdb.internal.ElementLifeCycle;
 import com.thinkaurelius.titan.graphdb.internal.InternalRelation;
@@ -58,6 +60,11 @@ public class PreloadedVertex extends CacheVertex {
         super.addToQueryCache(query, entries);
     }
 
+    @Override
+    protected void addToQueryCache(EdgeSliceQuery query, MyEntryList entries) {
+        super.addToQueryCache(query, entries);
+    }
+
     public EntryList getFromCache(final SliceQuery query) {
         return queryCache.get(query);
     }
@@ -75,6 +82,11 @@ public class PreloadedVertex extends CacheVertex {
 
     @Override
     public boolean hasLoadedRelations(SliceQuery query) {
+        return true;
+    }
+
+    @Override
+    public boolean hasLoadedRelations(EdgeSliceQuery query) {
         return true;
     }
 

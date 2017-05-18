@@ -3,6 +3,7 @@ package com.thinkaurelius.titan.diskstorage.keycolumnvalue;
 import com.thinkaurelius.titan.diskstorage.BackendException;
 import com.thinkaurelius.titan.diskstorage.StaticBuffer;
 import com.thinkaurelius.titan.diskstorage.StoreMetaData;
+import org.reflections.Store;
 
 import java.util.Map;
 
@@ -52,5 +53,7 @@ public interface KeyColumnValueStoreManager extends StoreManager {
      * @throws com.thinkaurelius.titan.diskstorage.BackendException
      */
     void mutateMany(Map<String, Map<StaticBuffer, KCVMutation>> mutations, StoreTransaction txh) throws BackendException;
+
+    void mutateEdge(Map<String, Map<Long, KCVEdgeMutation>> mutations, StoreTransaction txh) throws BackendException;
 
 }

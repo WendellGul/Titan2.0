@@ -339,7 +339,9 @@ public class StaticArrayEntryList extends AbstractList<Entry> implements EntryLi
         int num=0;
         int datalen=0;
         EntryMetaData[] metadataschema = null;
+        List<E> eList = new ArrayList<E>();
         for (E element : elements) {
+            eList.add(element);
             num++;
             datalen+=datahandler.getSize(getter.getColumn(element));
             datalen+=datahandler.getSize(getter.getValue(element));
@@ -351,7 +353,7 @@ public class StaticArrayEntryList extends AbstractList<Entry> implements EntryLi
         long[] limitAndValuePos = new long[num];
         int pos=0;
         int offset=0;
-        for (E element : elements) {
+        for (E element : eList) {
             if (element==null) throw new IllegalArgumentException("Unexpected null element in result set");
 
             offset=writeMetaData(data,offset,metadataschema,element,getter);

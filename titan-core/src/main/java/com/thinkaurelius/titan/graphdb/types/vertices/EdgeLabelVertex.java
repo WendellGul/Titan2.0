@@ -1,6 +1,7 @@
 package com.thinkaurelius.titan.graphdb.types.vertices;
 
 import com.thinkaurelius.titan.core.EdgeLabel;
+import com.thinkaurelius.titan.graphdb.database.idhandling.IDHandler;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
 import com.thinkaurelius.titan.graphdb.types.TypeDefinitionCategory;
 import org.apache.tinkerpop.gremlin.structure.Direction;
@@ -24,7 +25,8 @@ public class EdgeLabelVertex extends RelationTypeVertex implements EdgeLabel {
 
     @Override
     public boolean isUnidirected(Direction dir) {
-        return getDefinition().getValue(TypeDefinitionCategory.UNIDIRECTIONAL,Direction.class)==dir;
+        int dirId = getDefinition().getValue(TypeDefinitionCategory.UNIDIRECTIONAL, Integer.class);
+        return IDHandler.DirectionID.forId(dirId).getDirection() == dir;
     }
 
     @Override

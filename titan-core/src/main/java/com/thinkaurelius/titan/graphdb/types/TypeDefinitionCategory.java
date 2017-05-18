@@ -114,8 +114,17 @@ public enum TypeDefinitionCategory {
         switch(this) {
             case SORT_ORDER: return Order.ASC;
             case STATUS: return SchemaStatus.ENABLED;
+            case SORT_KEY: return new long[0];
             default: return null;
         }
+    }
+
+    public static TypeDefinitionCategory of(String name) {
+        for(TypeDefinitionCategory t : TypeDefinitionCategory.values()) {
+            if(t.name().toLowerCase().equals(name.toLowerCase()))
+                return t;
+        }
+        return null;
     }
 
 }

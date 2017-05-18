@@ -6,6 +6,7 @@ import com.thinkaurelius.titan.core.*;
 import com.thinkaurelius.titan.graphdb.internal.AbstractElement;
 import com.thinkaurelius.titan.graphdb.internal.ElementLifeCycle;
 import com.thinkaurelius.titan.graphdb.internal.InternalVertex;
+import com.thinkaurelius.titan.graphdb.query.vertex.MyVertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.query.vertex.VertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
 import com.thinkaurelius.titan.graphdb.types.VertexLabelVertex;
@@ -105,7 +106,7 @@ public abstract class AbstractVertex extends AbstractElement implements Internal
     }
 
     protected Vertex getVertexLabelInternal() {
-        return Iterables.getOnlyElement(tx().query(this).noPartitionRestriction().type(BaseLabel.VertexLabelEdge).direction(Direction.OUT).vertices(),null);
+        return Iterables.getOnlyElement(tx().myQuery(this).noPartitionRestriction().type(BaseLabel.VertexLabelEdge).direction(Direction.OUT).vertices(),null);
     }
 
     @Override
@@ -119,6 +120,12 @@ public abstract class AbstractVertex extends AbstractElement implements Internal
     public VertexCentricQueryBuilder query() {
         verifyAccess();
         return tx().query(this);
+    }
+
+    @Override
+    public MyVertexCentricQueryBuilder myQuery() {
+        verifyAccess();
+        return tx().myQuery(this);
     }
 
     @Override
@@ -153,15 +160,15 @@ public abstract class AbstractVertex extends AbstractElement implements Internal
     }
 
     public Iterator<Edge> edges(Direction direction, String... labels) {
-        return (Iterator)query().direction(direction).labels(labels).edges().iterator();
+        return (Iterator)myQuery().direction(direction).labels(labels).edges().iterator();
     }
 
     public <V> Iterator<VertexProperty<V>> properties(String... keys) {
-        return (Iterator)query().direction(Direction.OUT).keys(keys).properties().iterator();
+        return (Iterator)myQuery().direction(Direction.OUT).keys(keys).properties().iterator();
     }
 
     public Iterator<Vertex> vertices(final Direction direction, final String... edgeLabels) {
-        return (Iterator)query().direction(direction).labels(edgeLabels).vertices().iterator();
+        return (Iterator)myQuery().direction(direction).labels(edgeLabels).vertices().iterator();
 
     }
 

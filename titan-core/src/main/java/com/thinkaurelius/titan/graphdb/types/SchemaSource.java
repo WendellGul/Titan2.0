@@ -2,6 +2,7 @@ package com.thinkaurelius.titan.graphdb.types;
 
 import com.google.common.base.Preconditions;
 import com.thinkaurelius.titan.core.schema.SchemaStatus;
+import com.thinkaurelius.titan.diskstorage.MyEntry;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 
 /**

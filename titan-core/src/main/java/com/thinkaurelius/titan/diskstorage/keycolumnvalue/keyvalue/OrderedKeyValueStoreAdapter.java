@@ -52,6 +52,16 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
     }
 
     @Override
+    public MyEntryList getEdgeSlice(EdgeKeySliceQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
+    public Map<Long, MyEntryList> getEdgeSlice(List<Long> keys, EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
     public EntryList getSlice(KeySliceQuery query, StoreTransaction txh) throws BackendException {
         return convert(store.getSlice(convertQuery(query), txh));
     }
@@ -88,6 +98,10 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
         }
     }
 
+    @Override
+    public void mutateEdge(long key, List<MyEntry> additions, List<MyEntry> deletions, StoreTransaction txh) throws BackendException {
+
+    }
 
     @Override
     public KeyIterator getKeys(final KeyRangeQuery keyQuery, final StoreTransaction txh) throws BackendException {
@@ -107,6 +121,22 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
         return new KeyIteratorImpl(keyQuery,store.getSlice(query,txh));
     }
 
+
+    @Override
+    public KeyIterator getKeys(SliceQuery columnQuery, StoreTransaction txh) throws BackendException {
+        throw new UnsupportedOperationException("This store has ordered keys, use getKeys(KeyRangeQuery, StoreTransaction) instead");
+    }
+
+    @Override
+    public MyKeyIterator getKeys(EdgeKeyRangeQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
+    public MyKeyIterator getKeys(EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        throw new UnsupportedOperationException("This store has ordered keys, use getKeys(KeyRangeQuery, StoreTransaction) instead");
+    }
+
     private final StaticBuffer adjustToLength(StaticBuffer key) {
         if (hasFixedKeyLength() && key.length()!=keyLength) {
             if (key.length()>keyLength) {
@@ -116,13 +146,6 @@ public class OrderedKeyValueStoreAdapter extends BaseKeyColumnValueAdapter {
             }
         }
         return key;
-    }
-
-
-
-    @Override
-    public KeyIterator getKeys(SliceQuery columnQuery, StoreTransaction txh) throws BackendException {
-        throw new UnsupportedOperationException("This store has ordered keys, use getKeys(KeyRangeQuery, StoreTransaction) instead");
     }
 
     @Override

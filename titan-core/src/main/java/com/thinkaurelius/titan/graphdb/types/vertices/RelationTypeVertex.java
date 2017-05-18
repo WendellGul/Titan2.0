@@ -33,7 +33,8 @@ public abstract class RelationTypeVertex extends TitanSchemaVertex implements In
 
     @Override
     public Order getSortOrder() {
-        return getDefinition().getValue(TypeDefinitionCategory.SORT_ORDER, Order.class);
+        int ordinal = getDefinition().getValue(TypeDefinitionCategory.SORT_ORDER, Integer.class);
+        return Order.values()[ordinal];
     }
 
     @Override
@@ -48,7 +49,8 @@ public abstract class RelationTypeVertex extends TitanSchemaVertex implements In
 
     @Override
     public Multiplicity multiplicity() {
-        return getDefinition().getValue(TypeDefinitionCategory.MULTIPLICITY, Multiplicity.class);
+        int ordinal =  getDefinition().getValue(TypeDefinitionCategory.MULTIPLICITY, Integer.class);
+        return Multiplicity.values()[ordinal];
     }
 
     private ConsistencyModifier consistency = null;

@@ -4,6 +4,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.thinkaurelius.titan.diskstorage.Entry;
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.graphdb.internal.ElementLifeCycle;
 import com.thinkaurelius.titan.graphdb.internal.InternalRelation;
@@ -73,7 +75,17 @@ public class StandardVertex extends AbstractVertex {
     }
 
     @Override
+    public MyEntryList loadRelations(EdgeSliceQuery query, Retriever<EdgeSliceQuery, MyEntryList> lookup) {
+        return (isNew()) ? MyEntryList.EMPTY_LIST : lookup.get(query);
+    }
+
+    @Override
     public boolean hasLoadedRelations(SliceQuery query) {
+        return false;
+    }
+
+    @Override
+    public boolean hasLoadedRelations(EdgeSliceQuery query) {
         return false;
     }
 

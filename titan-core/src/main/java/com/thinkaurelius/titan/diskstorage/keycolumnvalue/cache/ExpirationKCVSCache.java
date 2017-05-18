@@ -41,6 +41,7 @@ public class ExpirationKCVSCache extends KCVSCache {
 
     private final Cache<KeySliceQuery,EntryList> cache;
     private final ConcurrentHashMap<StaticBuffer,Long> expiredKeys;
+    private final ConcurrentHashMap<Long, Long> expiredEdgeKeys;
 
     private final long cacheTimeMS;
     private final long invalidationGracePeriodMS;
@@ -69,6 +70,7 @@ public class ExpirationKCVSCache extends KCVSCache {
 
         cache = cachebuilder.build();
         expiredKeys = new ConcurrentHashMap<StaticBuffer, Long>(50,0.75f,concurrencyLevel);
+        expiredEdgeKeys = new ConcurrentHashMap<>(50, 0.75f, concurrencyLevel);
         penaltyCountdown = new CountDownLatch(PENALTY_THRESHOLD);
 
         cleanupThread = new CleanupThread();
@@ -134,6 +136,7 @@ public class ExpirationKCVSCache extends KCVSCache {
     public void clearCache() {
         cache.invalidateAll();
         expiredKeys.clear();
+        expiredEdgeKeys.clear();
         penaltyCountdown = new CountDownLatch(PENALTY_THRESHOLD);
     }
 
@@ -142,6 +145,14 @@ public class ExpirationKCVSCache extends KCVSCache {
         Preconditions.checkArgument(!hasValidateKeysOnly() || entries.isEmpty());
         expiredKeys.put(key,getExpirationTime());
         if (Math.random()<1.0/INVALIDATE_KEY_FRACTION_PENALTY) penaltyCountdown.countDown();
+    }
+
+    @Override
+    protected void invalidateEdge(long key, List<MyEntry> entries) {
+        Preconditions.checkArgument(!hasValidateKeysOnly() || entries.isEmpty());
+        expiredEdgeKeys.put(key, getExpirationTime());
+        if (Math.random() < 1.0 / INVALIDATE_KEY_FRACTION_PENALTY)
+            penaltyCountdown.countDown();
     }
 
     @Override

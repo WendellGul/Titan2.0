@@ -3,7 +3,11 @@ package com.thinkaurelius.titan.graphdb.internal;
 import com.google.common.base.Predicate;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
+import com.thinkaurelius.titan.graphdb.query.vertex.MyVertexCentricQuery;
+import com.thinkaurelius.titan.graphdb.query.vertex.MyVertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.query.vertex.VertexCentricQueryBuilder;
 import com.thinkaurelius.titan.util.datastructures.Retriever;
 
@@ -54,12 +58,16 @@ public interface InternalVertex extends TitanVertex, InternalElement {
      */
     public EntryList loadRelations(SliceQuery query, Retriever<SliceQuery,EntryList> lookup);
 
+    public MyEntryList loadRelations(EdgeSliceQuery query, Retriever<EdgeSliceQuery, MyEntryList> lookup);
+
     /**
      * Returns true if the results for the given query have already been loaded for this vertex and are locally cached.
      * @param query
      * @return
      */
     public boolean hasLoadedRelations(SliceQuery query);
+
+    public boolean hasLoadedRelations(EdgeSliceQuery query);
 
     /**
      * Whether this vertex has removed relations
@@ -76,5 +84,7 @@ public interface InternalVertex extends TitanVertex, InternalElement {
     @Override
     public VertexCentricQueryBuilder query();
 
+    @Override
+    public MyVertexCentricQueryBuilder myQuery();
 
 }

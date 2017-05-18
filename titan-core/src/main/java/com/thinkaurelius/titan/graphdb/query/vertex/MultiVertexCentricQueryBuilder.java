@@ -11,7 +11,10 @@ import com.thinkaurelius.titan.graphdb.query.profile.QueryProfiler;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of {@link TitanMultiVertexQuery} that extends {@link BasicVertexCentricQueryBuilder}

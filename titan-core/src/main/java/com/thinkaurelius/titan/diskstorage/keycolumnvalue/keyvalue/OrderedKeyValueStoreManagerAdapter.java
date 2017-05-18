@@ -107,6 +107,11 @@ public class OrderedKeyValueStoreManagerAdapter implements KeyColumnValueStoreMa
         manager.mutateMany(converted, txh);
     }
 
+    @Override
+    public void mutateEdge(Map<String, Map<Long, KCVEdgeMutation>> mutations, StoreTransaction txh) throws BackendException {
+
+    }
+
     private static final OrderedKeyValueStoreAdapter wrapKeyValueStore(OrderedKeyValueStore store, Map<String, Integer> keyLengths) {
         String name = store.getName();
         if (keyLengths.containsKey(name)) {

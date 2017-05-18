@@ -102,6 +102,17 @@ public class InMemoryStoreManager implements KeyColumnValueStoreManager {
     }
 
     @Override
+    public void mutateEdge(Map<String, Map<Long, KCVEdgeMutation>> mutations, StoreTransaction txh) throws BackendException {
+        for (Map.Entry<String, Map<Long, KCVEdgeMutation>> storeMut : mutations.entrySet()) {
+            KeyColumnValueStore store = stores.get(storeMut.getKey());
+            Preconditions.checkNotNull(store);
+            for (Map.Entry<Long, KCVEdgeMutation> keyMut : storeMut.getValue().entrySet()) {
+                store.mutateEdge(keyMut.getKey(), keyMut.getValue().getAdditions(), keyMut.getValue().getDeletions(), txh);
+            }
+        }
+    }
+
+    @Override
     public List<KeyRange> getLocalKeyPartition() throws BackendException {
         throw new UnsupportedOperationException();
     }

@@ -1,10 +1,7 @@
 package com.thinkaurelius.titan.diskstorage.keycolumnvalue;
 
 import com.google.common.collect.ImmutableList;
-import com.thinkaurelius.titan.diskstorage.BackendException;
-import com.thinkaurelius.titan.diskstorage.Entry;
-import com.thinkaurelius.titan.diskstorage.EntryList;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
 
 import java.util.List;
 import java.util.Map;
@@ -26,6 +23,8 @@ public interface KeyColumnValueStore {
 
     public static final List<Entry> NO_ADDITIONS = ImmutableList.of();
     public static final List<StaticBuffer> NO_DELETIONS = ImmutableList.of();
+    public static final List<MyEntry> NO_EDGE_ADDITIONS = ImmutableList.of();
+    public static final List<MyEntry> NO_EDGE_DELETIONS = ImmutableList.of();
 
     /**
      * Retrieves the list of entries (i.e. column-value pairs) for a specified query.
@@ -37,6 +36,8 @@ public interface KeyColumnValueStore {
      * @see KeySliceQuery
      */
     public EntryList getSlice(KeySliceQuery query, StoreTransaction txh) throws BackendException;
+
+    public MyEntryList getEdgeSlice(EdgeKeySliceQuery query, StoreTransaction txh) throws BackendException;
 
     /**
      * Retrieves the list of entries (i.e. column-value pairs) as specified by the given {@link SliceQuery} for all
@@ -50,6 +51,7 @@ public interface KeyColumnValueStore {
      */
     public Map<StaticBuffer,EntryList> getSlice(List<StaticBuffer> keys, SliceQuery query, StoreTransaction txh) throws BackendException;
 
+    public Map<Long, MyEntryList> getEdgeSlice(List<Long> keys, EdgeSliceQuery query, StoreTransaction txh) throws BackendException;
     /**
      * Verifies acquisition of locks {@code txh} from previous calls to
      * {@link #acquireLock(StaticBuffer, StaticBuffer, StaticBuffer, StoreTransaction)}
@@ -77,6 +79,8 @@ public interface KeyColumnValueStore {
      *                          has failed
      */
     public void mutate(StaticBuffer key, List<Entry> additions, List<StaticBuffer> deletions, StoreTransaction txh) throws BackendException;
+
+    public void mutateEdge(long key, List<MyEntry> additions, List<MyEntry> deletions, StoreTransaction txh) throws BackendException;
 
     /**
      * Attempts to claim a lock on the value at the specified {@code key} and
@@ -158,6 +162,10 @@ public interface KeyColumnValueStore {
      */
     public KeyIterator getKeys(SliceQuery query, StoreTransaction txh) throws BackendException;
     // like current getKeys if column-slice is such that it queries for vertex state property
+
+    public MyKeyIterator getKeys(EdgeKeyRangeQuery query, StoreTransaction txh) throws BackendException;
+
+    public MyKeyIterator getKeys(EdgeSliceQuery query, StoreTransaction txh) throws BackendException;
 
     /**
      * Returns the name of this store. Each store has a unique name which is used to open it.

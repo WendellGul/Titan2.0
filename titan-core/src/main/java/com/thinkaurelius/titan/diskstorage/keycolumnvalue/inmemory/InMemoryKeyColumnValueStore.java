@@ -4,10 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Maps;
-import com.thinkaurelius.titan.diskstorage.BackendException;
-import com.thinkaurelius.titan.diskstorage.Entry;
-import com.thinkaurelius.titan.diskstorage.EntryList;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.*;
 import com.thinkaurelius.titan.diskstorage.util.RecordIterator;
 import org.apache.commons.lang.StringUtils;
@@ -39,6 +36,16 @@ public class InMemoryKeyColumnValueStore implements KeyColumnValueStore {
     }
 
     @Override
+    public MyEntryList getEdgeSlice(EdgeKeySliceQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
+    public Map<Long, MyEntryList> getEdgeSlice(List<Long> keys, EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
     public EntryList getSlice(KeySliceQuery query, StoreTransaction txh) throws BackendException {
         ColumnValueStore cvs = kcv.get(query.getKey());
         if (cvs == null) return EntryList.EMPTY_LIST;
@@ -63,6 +70,11 @@ public class InMemoryKeyColumnValueStore implements KeyColumnValueStore {
     }
 
     @Override
+    public void mutateEdge(long key, List<MyEntry> additions, List<MyEntry> deletions, StoreTransaction txh) throws BackendException {
+
+    }
+
+    @Override
     public void acquireLock(StaticBuffer key, StaticBuffer column, StaticBuffer expectedValue, StoreTransaction txh) throws BackendException {
         throw new UnsupportedOperationException();
     }
@@ -75,6 +87,16 @@ public class InMemoryKeyColumnValueStore implements KeyColumnValueStore {
     @Override
     public KeyIterator getKeys(SliceQuery query, StoreTransaction txh) throws BackendException {
         return new RowIterator(kcv.entrySet().iterator(), query, txh);
+    }
+
+    @Override
+    public MyKeyIterator getKeys(EdgeKeyRangeQuery query, StoreTransaction txh) throws BackendException {
+        return null;
+    }
+
+    @Override
+    public MyKeyIterator getKeys(EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        return null;
     }
 
     @Override

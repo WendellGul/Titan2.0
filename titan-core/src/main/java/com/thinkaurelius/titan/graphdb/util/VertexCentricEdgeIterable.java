@@ -42,7 +42,7 @@ public class VertexCentricEdgeIterable<R extends TitanRelation> implements Itera
         public EdgeIterator() {
             this.vertexIter = vertices.iterator();
             if (vertexIter.hasNext()) {
-                currentOutEdges = relationCategory.executeQuery(vertexIter.next().query().direction(Direction.OUT)).iterator();
+                currentOutEdges = relationCategory.executeQuery(vertexIter.next().myQuery().direction(Direction.OUT)).iterator();
                 getNextEdge();
             }
         }
@@ -55,7 +55,7 @@ public class VertexCentricEdgeIterable<R extends TitanRelation> implements Itera
                     nextEdge = currentOutEdges.next();
                     break;
                 } else if (vertexIter.hasNext()) {
-                    currentOutEdges = relationCategory.executeQuery(vertexIter.next().query().direction(Direction.OUT)).iterator();
+                    currentOutEdges = relationCategory.executeQuery(vertexIter.next().myQuery().direction(Direction.OUT)).iterator();
                 } else break;
             }
         }

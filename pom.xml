@@ -7,7 +7,7 @@
     </parent>
     <groupId>com.thinkaurelius.titan</groupId>
     <artifactId>titan</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>2.0</version>
     <packaging>pom</packaging>
     <prerequisites>
         <maven>2.2.1</maven>
@@ -22,6 +22,10 @@
         delegating that concern to an extensible set of persistence solutions.
     </description>
     <developers>
+        <developer>
+            <name>Wendell Gul</name>
+            <email>wendellgul@hust.edu.cn</email>
+        </developer>
         <developer>
             <name>Matthias Broecheler</name>
             <email>me@matthiasb.com</email>
@@ -44,7 +48,7 @@
             <url>http://markorodriguez.com</url>
         </contributor>
     </contributors>
-    <inceptionYear>2012</inceptionYear>
+    <inceptionYear>2017</inceptionYear>
     <licenses>
         <license>
             <name>The Apache Software License, Version 2.0</name>
@@ -116,21 +120,8 @@
     </properties>
     <modules>
         <module>titan-core</module>
-        <module>titan-test</module>
-        <module>titan-berkeleyje</module>
         <module>titan-cassandra</module>
-        <module>titan-hadoop-parent</module>
-        <module>titan-hbase-parent</module>
-        <module>titan-es</module>
-        <module>titan-lucene</module>
-        <!-- TODO gremlin-server integration -->
-        <!-- <module>titan-rexster</module> -->
-        <module>titan-all</module>
-        <module>titan-dist</module>
-        <module>titan-doc</module>
-        <module>titan-solr</module>
-        <module>titan-great</module>
-        <module>titan-impala</module>
+        <module>titan-test</module>
     </modules>
     <repositories>
         <repository>

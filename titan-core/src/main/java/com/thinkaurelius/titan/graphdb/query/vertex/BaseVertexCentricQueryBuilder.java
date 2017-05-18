@@ -2,12 +2,7 @@ package com.thinkaurelius.titan.graphdb.query.vertex;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.thinkaurelius.titan.core.BaseVertexQuery;
-import com.thinkaurelius.titan.core.Cardinality;
-import com.thinkaurelius.titan.core.PropertyKey;
-import com.thinkaurelius.titan.core.RelationType;
-import com.thinkaurelius.titan.core.TitanRelation;
-import com.thinkaurelius.titan.core.TitanVertex;
+import com.thinkaurelius.titan.core.*;
 import com.thinkaurelius.titan.core.attribute.Cmp;
 import com.thinkaurelius.titan.core.schema.SchemaInspector;
 import com.thinkaurelius.titan.graphdb.internal.Order;

@@ -1,10 +1,7 @@
 package com.thinkaurelius.titan.diskstorage.keycolumnvalue;
 
 import com.google.common.base.Preconditions;
-import com.thinkaurelius.titan.diskstorage.BackendException;
-import com.thinkaurelius.titan.diskstorage.Entry;
-import com.thinkaurelius.titan.diskstorage.EntryList;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.cache.CacheTransaction;
 
 import java.util.List;
@@ -51,6 +48,16 @@ public class KCVSProxy implements KeyColumnValueStore {
     }
 
     @Override
+    public MyKeyIterator getKeys(EdgeKeyRangeQuery query, StoreTransaction txh) throws BackendException {
+        return store.getKeys(query, unwrapTx(txh));
+    }
+
+    @Override
+    public MyKeyIterator getKeys(EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        return store.getKeys(query, unwrapTx(txh));
+    }
+
+    @Override
     public String getName() {
         return store.getName();
     }
@@ -61,6 +68,16 @@ public class KCVSProxy implements KeyColumnValueStore {
     }
 
     @Override
+    public MyEntryList getEdgeSlice(EdgeKeySliceQuery query, StoreTransaction txh) throws BackendException {
+        return store.getEdgeSlice(query, unwrapTx(txh));
+    }
+
+    @Override
+    public Map<Long, MyEntryList> getEdgeSlice(List<Long> keys, EdgeSliceQuery query, StoreTransaction txh) throws BackendException {
+        return store.getEdgeSlice(keys, query, unwrapTx(txh));
+    }
+
+    @Override
     public EntryList getSlice(KeySliceQuery query, StoreTransaction txh) throws BackendException {
         return store.getSlice(query, unwrapTx(txh));
     }
@@ -68,5 +85,10 @@ public class KCVSProxy implements KeyColumnValueStore {
     @Override
     public Map<StaticBuffer,EntryList> getSlice(List<StaticBuffer> keys, SliceQuery query, StoreTransaction txh) throws BackendException {
         return store.getSlice(keys, query, unwrapTx(txh));
+    }
+
+    @Override
+    public void mutateEdge(long key, List<MyEntry> additions, List<MyEntry> deletions, StoreTransaction txh) throws BackendException {
+
     }
 }

@@ -121,7 +121,7 @@ public class IndexRemoveJob extends IndexUpdateJob implements ScanJob {
             }
             metrics.incrementCustom(DELETED_RECORDS_COUNT,deletions.size());
             if (isRelationTypeIndex()) {
-                mutator.mutateEdges(key, KCVSCache.NO_ADDITIONS, deletions);
+                //mutator.mutateEdges(key, KCVSCache.NO_ADDITIONS, deletions);
             } else {
                 mutator.mutateIndex(key, KCVSCache.NO_ADDITIONS, deletions);
             }

@@ -19,12 +19,12 @@ public enum CLevel implements CLevelInterface { // One ring to rule them all
 
     private final org.apache.cassandra.db.ConsistencyLevel db;
     private final org.apache.cassandra.thrift.ConsistencyLevel thrift;
-    private final com.netflix.astyanax.model.ConsistencyLevel astyanax;
+    private final com.datastax.driver.core.ConsistencyLevel datastax;
 
     private CLevel() {
         db = org.apache.cassandra.db.ConsistencyLevel.valueOf(toString());
         thrift = org.apache.cassandra.thrift.ConsistencyLevel.valueOf(toString());
-        astyanax = com.netflix.astyanax.model.ConsistencyLevel.valueOf("CL_" + toString());
+        datastax = com.datastax.driver.core.ConsistencyLevel.valueOf(toString());
     }
 
     @Override
@@ -38,8 +38,8 @@ public enum CLevel implements CLevelInterface { // One ring to rule them all
     }
 
     @Override
-    public com.netflix.astyanax.model.ConsistencyLevel getAstyanax() {
-        return astyanax;
+    public com.datastax.driver.core.ConsistencyLevel getDatastax() {
+        return datastax;
     }
 
     public static CLevel parse(String value) {

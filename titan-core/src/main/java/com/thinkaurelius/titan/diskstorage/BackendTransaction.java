@@ -9,6 +9,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.*;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.cache.KCVSCache;
 import com.thinkaurelius.titan.diskstorage.log.kcvs.ExternalCachePersistor;
 import org.apache.commons.lang.StringUtils;
@@ -21,12 +22,6 @@ import com.thinkaurelius.titan.core.TitanException;
 import com.thinkaurelius.titan.diskstorage.indexing.IndexQuery;
 import com.thinkaurelius.titan.diskstorage.indexing.IndexTransaction;
 import com.thinkaurelius.titan.diskstorage.indexing.RawQuery;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.KeyIterator;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.KeyRangeQuery;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.KeySliceQuery;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.StoreFeatures;
-import com.thinkaurelius.titan.diskstorage.keycolumnvalue.StoreTransaction;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.cache.CacheTransaction;
 import com.thinkaurelius.titan.diskstorage.util.BackendOperation;
 import com.thinkaurelius.titan.diskstorage.util.BufferUtil;
@@ -50,6 +45,8 @@ public class BackendTransaction implements LoggableTransaction {
     //Assumes 64 bit key length as specified in IDManager
     public static final StaticBuffer EDGESTORE_MIN_KEY = BufferUtil.zeroBuffer(8);
     public static final StaticBuffer EDGESTORE_MAX_KEY = BufferUtil.oneBuffer(8);
+    public static final long EDGESTORE_MIN_KEY_LONG = 0L;
+    public static final long EDGESTORE_MAX_KEY_LONG = Long.MAX_VALUE;
 
     private final CacheTransaction storeTx;
     private final BaseTransactionConfig txConfig;
@@ -181,8 +178,8 @@ public class BackendTransaction implements LoggableTransaction {
      * @param additions List of entries (column + value) to be added
      * @param deletions List of columns to be removed
      */
-    public void mutateEdges(StaticBuffer key, List<Entry> additions, List<Entry> deletions) throws BackendException {
-        edgeStore.mutateEntries(key, additions, deletions, storeTx);
+    public void mutateEdges(long key, List<MyEntry> additions, List<MyEntry> deletions) throws BackendException {
+        edgeStore.mutateEdges(key, additions, deletions, storeTx);
     }
 
     /**
@@ -270,7 +267,7 @@ public class BackendTransaction implements LoggableTransaction {
                 @Override
                 public Map<StaticBuffer,EntryList> call() throws Exception {
                     return cacheEnabled?edgeStore.getSlice(keys, query, storeTx):
-                                        edgeStore.getSliceNoCache(keys, query, storeTx);
+                            edgeStore.getSliceNoCache(keys, query, storeTx);
                 }
 
                 @Override
@@ -306,6 +303,98 @@ public class BackendTransaction implements LoggableTransaction {
                 }
             }
             return results;
+        }
+    }
+
+    public MyEntryList edgeStoreQuery(final EdgeKeySliceQuery query) {
+        return executeRead(new Callable<MyEntryList>() {
+            @Override
+            public MyEntryList call() throws Exception {
+                return cacheEnabled ? edgeStore.getEdgeSlice(query, storeTx):
+                        edgeStore.getEdgeSliceNoCache(query, storeTx);
+            }
+
+            @Override
+            public String toString() {
+                return "EdgeStoreQuery";
+            }
+        });
+    }
+
+    public Map<Long, MyEntryList> edgeStoreMultiQuery(final List<Long> keys, final EdgeSliceQuery query) {
+        if (storeFeatures.hasMultiQuery()) {
+            return executeRead(new Callable<Map<Long, MyEntryList>>() {
+                @Override
+                public Map<Long, MyEntryList> call() throws Exception {
+                    return cacheEnabled?edgeStore.getEdgeSlice(keys, query, storeTx):
+                            edgeStore.getEdgeSliceNoCache(keys, query, storeTx);
+                }
+
+                @Override
+                public String toString() {
+                    return "MultiEdgeStoreQuery";
+                }
+            });
+        } else {
+            final Map<Long, MyEntryList> results = new HashMap<Long, MyEntryList>(keys.size());
+            if (threadPool == null || keys.size() < MIN_TASKS_TO_PARALLELIZE) {
+                for (Long key : keys) {
+                    results.put(key,edgeStoreQuery(new EdgeKeySliceQuery(key, query)));
+                }
+            } else {
+                final CountDownLatch doneSignal = new CountDownLatch(keys.size());
+                final AtomicInteger failureCount = new AtomicInteger(0);
+                MyEntryList[] resultArray = new MyEntryList[keys.size()];
+                for (int i = 0; i < keys.size(); i++) {
+                    threadPool.execute(new MySliceQueryRunner(new EdgeKeySliceQuery(keys.get(i), query),
+                            doneSignal, failureCount, resultArray, i));
+                }
+                try {
+                    doneSignal.await();
+                } catch (InterruptedException e) {
+                    throw new TitanException("Interrupted while waiting for multi-query to complete", e);
+                }
+                if (failureCount.get() > 0) {
+                    throw new TitanException("Could not successfully complete multi-query. " + failureCount.get() + " individual queries failed.");
+                }
+                for (int i=0;i<keys.size();i++) {
+                    assert resultArray[i]!=null;
+                    results.put(keys.get(i),resultArray[i]);
+                }
+            }
+            return results;
+        }
+    }
+
+    private class MySliceQueryRunner implements Runnable {
+
+        final EdgeKeySliceQuery kq;
+        final CountDownLatch doneSignal;
+        final AtomicInteger failureCount;
+        final Object[] resultArray;
+        final int resultPosition;
+
+        private MySliceQueryRunner(EdgeKeySliceQuery kq, CountDownLatch doneSignal, AtomicInteger failureCount,
+                                 Object[] resultArray, int resultPosition) {
+            this.kq = kq;
+            this.doneSignal = doneSignal;
+            this.failureCount = failureCount;
+            this.resultArray = resultArray;
+            this.resultPosition = resultPosition;
+        }
+
+        @Override
+        public void run() {
+            try {
+                List<MyEntry> result;
+                result = edgeStoreQuery(kq);
+                resultArray[resultPosition] = result;
+            } catch (Exception e) {
+                failureCount.incrementAndGet();
+                log.warn("Individual query in multi-transaction failed: ", e);
+            } finally {
+                doneSignal.countDown();
+            }
         }
     }
 
@@ -366,6 +455,41 @@ public class BackendTransaction implements LoggableTransaction {
         return executeRead(new Callable<KeyIterator>() {
             @Override
             public KeyIterator call() throws Exception {
+                return edgeStore.getKeys(range, storeTx);
+            }
+
+            @Override
+            public String toString() {
+                return "EdgeStoreKeys";
+            }
+        });
+    }
+
+    public MyKeyIterator edgeStoreKeys(final EdgeSliceQuery sliceQuery) {
+        if (!storeFeatures.hasScan())
+            throw new UnsupportedOperationException("The configured storage backend does not support global graph operations - use Faunus instead");
+
+        return executeRead(new Callable<MyKeyIterator>() {
+            @Override
+            public MyKeyIterator call() throws Exception {
+                return (storeFeatures.isKeyOrdered())
+                        ? edgeStore.getKeys(new EdgeKeyRangeQuery(EDGESTORE_MIN_KEY_LONG, EDGESTORE_MAX_KEY_LONG, sliceQuery), storeTx)
+                        : edgeStore.getKeys(sliceQuery, storeTx);
+            }
+
+            @Override
+            public String toString() {
+                return "EdgeStoreKeys";
+            }
+        });
+    }
+
+    public MyKeyIterator edgeStoreKeys(final EdgeKeyRangeQuery range) {
+        Preconditions.checkArgument(storeFeatures.hasOrderedScan(), "The configured storage backend does not support ordered scans");
+
+        return executeRead(new Callable<MyKeyIterator>() {
+            @Override
+            public MyKeyIterator call() throws Exception {
                 return edgeStore.getKeys(range, storeTx);
             }
 

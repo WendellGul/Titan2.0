@@ -24,7 +24,7 @@ public class ElementHelper {
             else return ImmutableList.of(value);
         } else {
             assert element instanceof TitanVertex;
-            return Iterables.transform((((TitanVertex) element).query()).keys(key.name()).properties(), new Function<TitanVertexProperty, Object>() {
+            return Iterables.transform((((TitanVertex) element).myQuery()).keys(key.name()).properties(), new Function<TitanVertexProperty, Object>() {
                 @Nullable
                 @Override
                 public Object apply(@Nullable TitanVertexProperty titanProperty) {

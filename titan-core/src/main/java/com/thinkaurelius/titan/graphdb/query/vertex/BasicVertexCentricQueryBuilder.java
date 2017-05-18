@@ -6,21 +6,24 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.thinkaurelius.titan.core.*;
 import com.thinkaurelius.titan.core.attribute.Cmp;
+import com.thinkaurelius.titan.core.schema.SchemaStatus;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.graphdb.database.EdgeSerializer;
-import com.thinkaurelius.titan.graphdb.internal.*;
+import com.thinkaurelius.titan.graphdb.internal.ElementLifeCycle;
+import com.thinkaurelius.titan.graphdb.internal.InternalRelationType;
+import com.thinkaurelius.titan.graphdb.internal.InternalVertex;
+import com.thinkaurelius.titan.graphdb.internal.RelationCategory;
 import com.thinkaurelius.titan.graphdb.query.*;
 import com.thinkaurelius.titan.graphdb.query.condition.*;
 import com.thinkaurelius.titan.graphdb.query.profile.QueryProfiler;
 import com.thinkaurelius.titan.graphdb.relations.StandardVertexProperty;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
-import com.thinkaurelius.titan.core.schema.SchemaStatus;
 import com.thinkaurelius.titan.graphdb.types.system.ImplicitKey;
 import com.thinkaurelius.titan.graphdb.types.system.SystemRelationType;
-import org.apache.tinkerpop.gremlin.structure.Direction;
 import com.thinkaurelius.titan.util.datastructures.Interval;
 import com.thinkaurelius.titan.util.datastructures.PointInterval;
 import com.thinkaurelius.titan.util.datastructures.RangeInterval;
+import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -193,7 +196,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
         assert isImplicitKeyQuery(RelationCategory.PROPERTY);
         if (dir==Direction.IN || limit<1) return ImmutableList.of();
         ImplicitKey key = (ImplicitKey)tx.getRelationType(types[0]);
-        return ImmutableList.of((TitanRelation)new StandardVertexProperty(0,key,v,key.computeProperty(v), v.isNew()?ElementLifeCycle.New:ElementLifeCycle.Loaded));
+        return ImmutableList.of((TitanRelation)new StandardVertexProperty(0,key,v,key.computeProperty(v), v.isNew()? ElementLifeCycle.New: ElementLifeCycle.Loaded));
     }
 
     protected interface ResultConstructor<Q> {
@@ -301,7 +304,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
                 for (InternalVertex rep : representatives) {
                     Iterable<TitanVertex> iter = executeIndividualVertices(rep,baseQuery);
                     if (merge==null) merge = iter;
-                    else merge = ResultMergeSortIterator.mergeSort(merge,iter,VertexArrayList.VERTEX_ID_COMPARATOR,false);
+                    else merge = ResultMergeSortIterator.mergeSort(merge,iter, VertexArrayList.VERTEX_ID_COMPARATOR,false);
                 }
                 return ResultSetIterator.wrap(merge,baseQuery.getLimit());
             } else vertex = tx.getCanonicalVertex(vertex);
@@ -419,7 +422,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
             BackendQueryHolder<SliceQuery> query = new BackendQueryHolder<SliceQuery>(serializer.getQuery(returnType, querySystem),
                     ((dir == Direction.BOTH || (returnType == RelationCategory.PROPERTY && dir == Direction.OUT))
                             && !conditions.hasChildren()), orders.isEmpty());
-            if (sliceLimit!=Query.NO_LIMIT && sliceLimit<Integer.MAX_VALUE/3) {
+            if (sliceLimit!= Query.NO_LIMIT && sliceLimit<Integer.MAX_VALUE/3) {
                 //If only one direction is queried, ask for twice the limit from backend since approximately half will be filtered
                 if (dir != Direction.BOTH && (returnType == RelationCategory.EDGE || returnType == RelationCategory.RELATION))
                     sliceLimit *= 2;
@@ -604,8 +607,8 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
         for (i=0;i<type.getSortKey().length;i++) {
             entireKey[i]=tx.getExistingPropertyKey(type.getSortKey()[i]);
         }
-        if (type.isEdgeLabel() && !type.multiplicity().isUnique(dir)) entireKey[i++]=ImplicitKey.ADJACENT_ID;
-        if (!type.multiplicity().isConstrained()) entireKey[i++]=ImplicitKey.TITANID;
+        if (type.isEdgeLabel() && !type.multiplicity().isUnique(dir)) entireKey[i++]= ImplicitKey.ADJACENT_ID;
+        if (!type.multiplicity().isConstrained()) entireKey[i++]= ImplicitKey.TITANID;
         return entireKey;
     }
 
@@ -708,7 +711,7 @@ public abstract class BasicVertexCentricQueryBuilder<Q extends BaseVertexQuery<Q
      * @return
      */
     private int computeLimit(int remainingConditions, int baseLimit) {
-        if (baseLimit==Query.NO_LIMIT) return baseLimit;
+        if (baseLimit== Query.NO_LIMIT) return baseLimit;
         assert baseLimit>0;
         baseLimit = Math.max(baseLimit,Math.min(HARD_MAX_LIMIT, QueryUtil.adjustLimitForTxModifications(tx, remainingConditions, baseLimit)));
         assert baseLimit>0;

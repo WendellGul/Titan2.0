@@ -5,6 +5,7 @@ import com.thinkaurelius.titan.core.TitanVertexProperty;
 import com.thinkaurelius.titan.core.TitanRelation;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.graphdb.relations.CacheEdge;
+import com.thinkaurelius.titan.graphdb.relations.MyCacheEdge;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 import org.apache.commons.lang.builder.HashCodeBuilder;
 
@@ -28,6 +29,8 @@ public class DirectionCondition<E extends TitanRelation> extends Literal<E> {
         if (direction==Direction.BOTH) return true;
         if (element instanceof CacheEdge) {
             return direction==((CacheEdge)element).getVertexCentricDirection();
+        } else if (element instanceof MyCacheEdge) {
+            return direction == ((MyCacheEdge) element).getVertexCentricDirection();
         } else if (element instanceof TitanEdge) {
             return ((TitanEdge)element).vertex(direction).equals(baseVertex);
         } else if (element instanceof TitanVertexProperty) {

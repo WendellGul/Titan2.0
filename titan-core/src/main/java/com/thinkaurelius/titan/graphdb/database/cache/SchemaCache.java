@@ -1,6 +1,7 @@
 package com.thinkaurelius.titan.graphdb.database.cache;
 
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
 import com.thinkaurelius.titan.graphdb.types.system.BaseRelationType;
 import org.apache.tinkerpop.gremlin.structure.Direction;
 
@@ -23,6 +24,8 @@ public interface SchemaCache {
 
     public EntryList getSchemaRelations(long schemaId, BaseRelationType type, final Direction dir);
 
+    public MyEntryList getEdgeSchemaRelations(long schemaId, BaseRelationType type, final Direction dir);
+
     public void expireSchemaElement(final long schemaId);
 
     public interface StoreRetrieval {
@@ -31,6 +34,7 @@ public interface SchemaCache {
 
         public EntryList retrieveSchemaRelations(final long schemaId, final BaseRelationType type, final Direction dir);
 
+        public MyEntryList retrieveEdgeSchemaRelations(final long schemaId, final BaseRelationType type);
     }
 
 }

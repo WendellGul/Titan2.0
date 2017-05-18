@@ -6,9 +6,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.thinkaurelius.titan.core.*;
 import com.thinkaurelius.titan.core.schema.*;
-import com.thinkaurelius.titan.diskstorage.BackendTransaction;
-import com.thinkaurelius.titan.diskstorage.Entry;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
 import com.thinkaurelius.titan.diskstorage.configuration.Configuration;
 import com.thinkaurelius.titan.diskstorage.indexing.IndexEntry;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.cache.KCVSCache;
@@ -21,9 +19,8 @@ import com.thinkaurelius.titan.graphdb.internal.InternalRelationType;
 import com.thinkaurelius.titan.graphdb.olap.QueryContainer;
 import com.thinkaurelius.titan.graphdb.olap.VertexScanJob;
 import com.thinkaurelius.titan.graphdb.relations.EdgeDirection;
-import com.thinkaurelius.titan.graphdb.types.CompositeIndexType;
-import com.thinkaurelius.titan.graphdb.types.IndexType;
-import com.thinkaurelius.titan.graphdb.types.MixedIndexType;
+import com.thinkaurelius.titan.graphdb.types.*;
+import com.thinkaurelius.titan.graphdb.types.system.BaseKey;
 import com.thinkaurelius.titan.graphdb.types.system.BaseLabel;
 import com.thinkaurelius.titan.graphdb.types.vertices.TitanSchemaVertex;
 import org.apache.tinkerpop.gremlin.structure.Direction;
@@ -119,20 +116,31 @@ public class IndexRepairJob extends IndexUpdateJob implements VertexScanJob {
             if (index instanceof RelationTypeIndex) {
                 RelationTypeIndexWrapper wrapper = (RelationTypeIndexWrapper)index;
                 InternalRelationType wrappedType = wrapper.getWrappedType();
-                EdgeSerializer edgeSerializer = writeTx.getEdgeSerializer();
-                List<Entry> additions = new ArrayList<>();
+                List<MyEntry> additions = new ArrayList<>();
 
                 for (TitanRelation relation : vertex.query().types(indexRelationTypeName).direction(Direction.OUT).relations()) {
                     InternalRelation titanRelation = (InternalRelation)relation;
                     for (int pos = 0; pos < titanRelation.getArity(); pos++) {
                         if (!wrappedType.isUnidirected(Direction.BOTH) && !wrappedType.isUnidirected(EdgeDirection.fromPosition(pos)))
                             continue; //Directionality is not covered
-                        Entry entry = edgeSerializer.writeRelation(titanRelation, wrappedType, pos, writeTx);
+                        MyEntry entry = null;
+                        if(titanRelation.isProperty()) {
+                            PropertyKey key = (PropertyKey) titanRelation.getType();
+                            Object value = ((TitanVertexProperty) titanRelation).value();
+                            assert key.dataType().isInstance(value);
+                            TypeDefinitionCategory typeValue = null;
+                            for(PropertyKey k : titanRelation.getPropertyKeysDirect())
+                                typeValue = ((TypeDefinitionDescription) titanRelation.getValueDirect(k)).getCategory();
+                            entry = new PropertyEntry(key.longId(), value, typeValue);
+                        }
+                        else {
+                            long otherVertexId = titanRelation.getVertex((pos + 1) % 2).longId();
+                            entry = new EdgeEntry(titanRelation.longId(), wrappedType.longId(), pos, otherVertexId);
+                        }
                         additions.add(entry);
                     }
                 }
-                StaticBuffer vertexKey = writeTx.getIdInspector().getKey(vertex.longId());
-                mutator.mutateEdges(vertexKey, additions, KCVSCache.NO_DELETIONS);
+                mutator.mutateEdges(vertex.longId(), additions, KCVSCache.NO_EDGE_DELETIONS);
                 metrics.incrementCustom(ADDED_RECORDS_COUNT, additions.size());
             } else if (index instanceof TitanGraphIndex) {
                 IndexType indexType = mgmt.getSchemaVertex(index).asIndexType();

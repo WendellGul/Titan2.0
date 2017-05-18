@@ -76,6 +76,27 @@ public class MetricInstrumentedStoreManager implements KeyColumnValueStoreManage
     }
 
     @Override
+    public void mutateEdge(Map<String, Map<Long, KCVEdgeMutation>> mutations, StoreTransaction txh) throws BackendException {
+        if (!txh.getConfiguration().hasGroupName()) {
+            backend.mutateEdge(mutations,txh);
+        }
+        String prefix = txh.getConfiguration().getGroupName();
+
+        final MetricManager mgr = MetricManager.INSTANCE;
+        mgr.getCounter(prefix, managerMetricsName, M_MUTATE, M_CALLS).inc();
+        final Timer.Context tc = mgr.getTimer(prefix,  managerMetricsName, M_MUTATE, M_TIME).time();
+
+        try {
+            backend.mutateEdge(mutations,txh);
+        } catch (BackendException | RuntimeException e) {
+            mgr.getCounter(prefix,  managerMetricsName, M_MUTATE, M_EXCEPTIONS).inc();
+            throw e;
+        } finally {
+            tc.stop();
+        }
+    }
+
+    @Override
     public StoreTransaction beginTransaction(BaseTransactionConfig config) throws BackendException {
         MetricManager.INSTANCE.getCounter(GLOBAL_PREFIX, managerMetricsName, M_START_TX, M_CALLS).inc();
         return backend.beginTransaction(config);

@@ -10,10 +10,8 @@ import com.thinkaurelius.titan.core.schema.ConsistencyModifier;
 import com.thinkaurelius.titan.core.schema.SchemaStatus;
 import com.thinkaurelius.titan.core.schema.TitanManagement;
 import com.thinkaurelius.titan.diskstorage.*;
-import com.thinkaurelius.titan.diskstorage.configuration.BasicConfiguration;
 import com.thinkaurelius.titan.diskstorage.configuration.Configuration;
 import com.thinkaurelius.titan.diskstorage.configuration.ModifiableConfiguration;
-import com.thinkaurelius.titan.diskstorage.configuration.backend.CommonsConfiguration;
 import com.thinkaurelius.titan.diskstorage.indexing.IndexEntry;
 import com.thinkaurelius.titan.diskstorage.indexing.IndexTransaction;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.*;
@@ -23,7 +21,6 @@ import com.thinkaurelius.titan.diskstorage.log.Message;
 import com.thinkaurelius.titan.diskstorage.log.ReadMarker;
 import com.thinkaurelius.titan.diskstorage.log.kcvs.KCVSLog;
 import com.thinkaurelius.titan.diskstorage.util.RecordIterator;
-import com.thinkaurelius.titan.diskstorage.util.StaticArrayEntry;
 import com.thinkaurelius.titan.diskstorage.util.time.TimestampProvider;
 import com.thinkaurelius.titan.graphdb.configuration.GraphDatabaseConfiguration;
 import com.thinkaurelius.titan.graphdb.database.cache.SchemaCache;
@@ -51,6 +48,8 @@ import com.thinkaurelius.titan.graphdb.transaction.StandardTransactionBuilder;
 import com.thinkaurelius.titan.graphdb.transaction.TransactionConfiguration;
 import com.thinkaurelius.titan.graphdb.types.CompositeIndexType;
 import com.thinkaurelius.titan.graphdb.types.MixedIndexType;
+import com.thinkaurelius.titan.graphdb.types.TypeDefinitionCategory;
+import com.thinkaurelius.titan.graphdb.types.TypeDefinitionDescription;
 import com.thinkaurelius.titan.graphdb.types.system.BaseKey;
 import com.thinkaurelius.titan.graphdb.types.system.BaseRelationType;
 import com.thinkaurelius.titan.graphdb.types.vertices.TitanSchemaVertex;
@@ -73,7 +72,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.thinkaurelius.titan.graphdb.configuration.GraphDatabaseConfiguration.REGISTRATION_TIME;
-import static com.thinkaurelius.titan.graphdb.configuration.GraphDatabaseConfiguration.ROOT_NS;
 
 public class StandardTitanGraph extends TitanBlueprintsGraph {
 
@@ -103,7 +101,9 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
 
     //Caches
     public SliceQuery vertexExistenceQuery;
+    public EdgeSliceQuery vertexExistenceQuery_;
     private RelationQueryCache queryCache;
+    private EdgeRelationQueryCache edgeQueryCache;
     private SchemaCache schemaCache;
 
     //Log
@@ -131,7 +131,9 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
                 this.backend.getIndexInformation(), storeFeatures.isDistributed() && storeFeatures.isKeyOrdered());
         this.edgeSerializer = new EdgeSerializer(this.serializer);
         this.vertexExistenceQuery = edgeSerializer.getQuery(BaseKey.VertexExists, Direction.OUT, new EdgeSerializer.TypedInterval[0]).setLimit(1);
+        this.vertexExistenceQuery_ = edgeSerializer.getEdgeQuery(BaseKey.VertexExists, Direction.OUT);
         this.queryCache = new RelationQueryCache(this.edgeSerializer);
+        this.edgeQueryCache = new EdgeRelationQueryCache(this.edgeSerializer);
         this.schemaCache = configuration.getTypeCache(typeCacheRetrieval);
         this.times = configuration.getTimestampProvider();
 
@@ -370,6 +372,21 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
             }
         }
 
+        @Override
+        public MyEntryList retrieveEdgeSchemaRelations(long schemaId, BaseRelationType type) {
+            EdgeSliceQuery query = edgeQueryCache.getQuery(type, null);
+            Configuration customTxOptions = backend.getStoreFeatures().getKeyConsistentTxConfig();
+            StandardTitanTx consistentTx = null;
+            try {
+                consistentTx = StandardTitanGraph.this.newTransaction(new StandardTransactionBuilder(getConfiguration(),
+                        StandardTitanGraph.this, customTxOptions).groupName(GraphDatabaseConfiguration.METRICS_SCHEMA_PREFIX_DEFAULT));
+                consistentTx.getTxHandle().disableCache();
+                MyEntryList result = myEdgeQuery(schemaId, query, consistentTx.getTxHandle());
+                return result;
+            } finally {
+                TXUtils.rollbackQuietly(consistentTx);
+            }
+        }
     };
 
     public RecordIterator<Long> getVertexIDs(final BackendTransaction tx) {
@@ -377,11 +394,11 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
                 backend.getStoreFeatures().hasUnorderedScan(),
                 "The configured storage backend does not support global graph operations - use Faunus instead");
 
-        final KeyIterator keyiter;
+        final MyKeyIterator keyiter;
         if (backend.getStoreFeatures().hasUnorderedScan()) {
-            keyiter = tx.edgeStoreKeys(vertexExistenceQuery);
+            keyiter = tx.edgeStoreKeys(vertexExistenceQuery_);
         } else {
-            keyiter = tx.edgeStoreKeys(new KeyRangeQuery(IDHandler.MIN_KEY, IDHandler.MAX_KEY, vertexExistenceQuery));
+            keyiter = tx.edgeStoreKeys(new EdgeKeyRangeQuery(IDHandler.MIN_KEY_LONG, IDHandler.MAX_KEY_LONG, vertexExistenceQuery_));
         }
 
         return new RecordIterator<Long>() {
@@ -393,7 +410,7 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
 
             @Override
             public Long next() {
-                return idManager.getKeyID(keyiter.next());
+                return keyiter.next();
             }
 
             @Override
@@ -406,6 +423,11 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
                 throw new UnsupportedOperationException("Removal not supported");
             }
         };
+    }
+
+    public MyEntryList myEdgeQuery(long vid, EdgeSliceQuery query, BackendTransaction tx) {
+        Preconditions.checkArgument(vid > 0);
+        return tx.edgeStoreQuery(new EdgeKeySliceQuery(vid, query));
     }
 
     public EntryList edgeQuery(long vid, SliceQuery query, BackendTransaction tx) {
@@ -423,6 +445,18 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
         Map<StaticBuffer,EntryList> result = tx.edgeStoreMultiQuery(vertexIds, query);
         List<EntryList> resultList = new ArrayList<EntryList>(result.size());
         for (StaticBuffer v : vertexIds) resultList.add(result.get(v));
+        return resultList;
+    }
+
+    public List<MyEntryList> edgeMultiQuery(LongArrayList vids, EdgeSliceQuery query, BackendTransaction tx) {
+        Preconditions.checkArgument(vids != null && !vids.isEmpty());
+        List<Long> vertexIds = new ArrayList<>();
+        for(int i = 0; i < vids.size(); i++) {
+            vertexIds.add(vids.get(i));
+        }
+        Map<Long, MyEntryList> result = tx.edgeStoreMultiQuery(vertexIds, query);
+        List<MyEntryList> resultList = new ArrayList<MyEntryList>(result.size());
+        for (long v : vertexIds) resultList.add(result.get(v));
         return resultList;
     }
 
@@ -560,8 +594,8 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
         for (Long vertexid : mutations.keySet()) {
             Preconditions.checkArgument(vertexid > 0, "Vertex has no id: %s", vertexid);
             List<InternalRelation> edges = mutations.get(vertexid);
-            List<Entry> additions = new ArrayList<Entry>(edges.size());
-            List<Entry> deletions = new ArrayList<Entry>(Math.max(10, edges.size() / 10));
+            List<MyEntry> additions = new ArrayList<MyEntry>(edges.size());
+            List<MyEntry> deletions = new ArrayList<MyEntry>(Math.max(10, edges.size() / 10));
             for (InternalRelation edge : edges) {
                 InternalRelationType baseType = (InternalRelationType) edge.getType();
                 assert baseType.getBaseType()==null;
@@ -571,8 +605,25 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
                     for (int pos = 0; pos < edge.getArity(); pos++) {
                         if (!type.isUnidirected(Direction.BOTH) && !type.isUnidirected(EdgeDirection.fromPosition(pos)))
                             continue; //Directionality is not covered
-                        if (edge.getVertex(pos).longId()==vertexid) {
-                            StaticArrayEntry entry = edgeSerializer.writeRelation(edge, type, pos, tx);
+                        if (edge.getVertex(pos).longId() == vertexid) {
+
+                            MyEntry entry = null;
+                            if(edge.isProperty()) {
+                                PropertyKey key = (PropertyKey) baseType;
+                                Object value = ((TitanVertexProperty) edge).value();
+                                assert key.dataType().isInstance(value);
+                                TypeDefinitionCategory typeValue = null;
+                                for(PropertyKey k : edge.getPropertyKeysDirect())
+                                    typeValue = ((TypeDefinitionDescription) edge.getValueDirect(k)).getCategory();
+                                entry = new PropertyEntry(key.longId(), value, typeValue);
+                            }
+                            else {
+                                long otherVertexId = edge.getVertex((pos + 1) % 2).longId();
+                                int dirId = pos == 0 ? IDHandler.DirectionID.EDGE_OUT_DIR.getId() :
+                                        IDHandler.DirectionID.EDGE_IN_DIR.getId();
+                                entry = new EdgeEntry(edge.longId(), type.longId(), dirId, otherVertexId);
+                            }
+
                             if (edge.isRemoved()) {
                                 deletions.add(entry);
                             } else {
@@ -588,8 +639,7 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
                 }
             }
 
-            StaticBuffer vertexKey = idManager.getKey(vertexid);
-            mutator.mutateEdges(vertexKey, additions, deletions);
+            mutator.mutateEdges(vertexid, additions, deletions);
         }
 
         //6) Add index updates
@@ -631,6 +681,7 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
     };
 
     private static final Predicate<InternalRelation> NO_FILTER = Predicates.alwaysTrue();
+
 
     public void commit(final Collection<InternalRelation> addedRelations,
                      final Collection<InternalRelation> deletedRelations, final StandardTitanTx tx) {
@@ -804,6 +855,5 @@ public class StandardTitanGraph extends TitanBlueprintsGraph {
             graph.closeInternal();
         }
     }
-
 
 }

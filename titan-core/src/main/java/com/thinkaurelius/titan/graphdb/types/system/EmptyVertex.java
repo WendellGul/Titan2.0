@@ -4,10 +4,13 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterators;
 import com.thinkaurelius.titan.core.*;
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
+import com.thinkaurelius.titan.diskstorage.keycolumnvalue.EdgeSliceQuery;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
 import com.thinkaurelius.titan.graphdb.internal.ElementLifeCycle;
 import com.thinkaurelius.titan.graphdb.internal.InternalRelation;
 import com.thinkaurelius.titan.graphdb.internal.InternalVertex;
+import com.thinkaurelius.titan.graphdb.query.vertex.MyVertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.query.vertex.VertexCentricQueryBuilder;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
 import com.thinkaurelius.titan.util.datastructures.Retriever;
@@ -31,6 +34,11 @@ public class EmptyVertex implements InternalVertex {
     }
 
     @Override
+    public MyVertexCentricQueryBuilder myQuery() {
+        throw new UnsupportedOperationException(errorName + " do not support querying");
+    }
+
+    @Override
     public List<InternalRelation> getAddedRelations(Predicate<InternalRelation> query) {
         throw new UnsupportedOperationException(errorName + " do not support incident edges");
     }
@@ -41,7 +49,17 @@ public class EmptyVertex implements InternalVertex {
     }
 
     @Override
+    public MyEntryList loadRelations(EdgeSliceQuery query, Retriever<EdgeSliceQuery, MyEntryList> lookup) {
+        throw new UnsupportedOperationException(errorName + " do not support incident edges");
+    }
+
+    @Override
     public boolean hasLoadedRelations(SliceQuery query) {
+        return false;
+    }
+
+    @Override
+    public boolean hasLoadedRelations(EdgeSliceQuery query) {
         return false;
     }
 

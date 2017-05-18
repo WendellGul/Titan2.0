@@ -8,6 +8,7 @@ import com.thinkaurelius.titan.core.TitanVertexProperty;
 import com.thinkaurelius.titan.core.TitanVertex;
 import com.thinkaurelius.titan.core.TitanVertexQuery;
 import com.thinkaurelius.titan.core.schema.SchemaStatus;
+import com.thinkaurelius.titan.diskstorage.MyEntry;
 import com.thinkaurelius.titan.graphdb.internal.TitanSchemaCategory;
 import com.thinkaurelius.titan.graphdb.transaction.RelationConstructor;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
@@ -36,8 +37,8 @@ public class TitanSchemaVertex extends CacheVertex implements SchemaSource {
             TitanVertexProperty<String> p;
             if (isLoaded()) {
                 StandardTitanTx tx = tx();
-                p = (TitanVertexProperty) Iterables.getOnlyElement(RelationConstructor.readRelation(this,
-                        tx.getGraph().getSchemaCache().getSchemaRelations(longId(), BaseKey.SchemaName, Direction.OUT),
+                p = (TitanVertexProperty) Iterables.getOnlyElement(RelationConstructor.myReadRelation(this,
+                        tx.getGraph().getSchemaCache().getEdgeSchemaRelations(longId(), BaseKey.SchemaName, Direction.OUT),
                         tx), null);
             } else {
                 p = Iterables.getOnlyElement(query().type(BaseKey.SchemaName).properties(), null);
@@ -64,8 +65,8 @@ public class TitanSchemaVertex extends CacheVertex implements SchemaSource {
             Iterable<TitanVertexProperty> ps;
             if (isLoaded()) {
                 StandardTitanTx tx = tx();
-                ps = (Iterable)RelationConstructor.readRelation(this,
-                        tx.getGraph().getSchemaCache().getSchemaRelations(longId(), BaseKey.SchemaDefinitionProperty, Direction.OUT),
+                ps = (Iterable)RelationConstructor.myReadRelation(this,
+                        tx.getGraph().getSchemaCache().getEdgeSchemaRelations(longId(), BaseKey.SchemaDefinitionProperty, Direction.OUT),
                         tx);
             } else {
                 ps = query().type(BaseKey.SchemaDefinitionProperty).properties();
@@ -85,6 +86,9 @@ public class TitanSchemaVertex extends CacheVertex implements SchemaSource {
     private ListMultimap<TypeDefinitionCategory,Entry> outRelations = null;
     private ListMultimap<TypeDefinitionCategory,Entry> inRelations = null;
 
+    private ListMultimap<TypeDefinitionCategory, MyEntry> outRelations_ = null;
+    private ListMultimap<TypeDefinitionCategory, MyEntry> inRelations_ = null;
+
 
     @Override
     public Iterable<Entry> getRelated(TypeDefinitionCategory def, Direction dir) {
@@ -95,8 +99,8 @@ public class TitanSchemaVertex extends CacheVertex implements SchemaSource {
             Iterable<TitanEdge> edges;
             if (isLoaded()) {
                 StandardTitanTx tx = tx();
-                edges = (Iterable)RelationConstructor.readRelation(this,
-                        tx.getGraph().getSchemaCache().getSchemaRelations(longId(), BaseLabel.SchemaDefinitionEdge, dir),
+                edges = (Iterable)RelationConstructor.myReadRelation(this,
+                        tx.getGraph().getSchemaCache().getEdgeSchemaRelations(longId(), BaseLabel.SchemaDefinitionEdge, dir),
                         tx);
             } else {
                 edges = query().type(BaseLabel.SchemaDefinitionEdge).direction(dir).edges();
@@ -154,7 +158,8 @@ public class TitanSchemaVertex extends CacheVertex implements SchemaSource {
 
     @Override
     public SchemaStatus getStatus() {
-        return getDefinition().getValue(TypeDefinitionCategory.STATUS,SchemaStatus.class);
+        int ordinal = getDefinition().getValue(TypeDefinitionCategory.STATUS, Integer.class);
+        return SchemaStatus.values()[ordinal];
     }
 
     @Override

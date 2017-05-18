@@ -6,5 +6,5 @@ public interface CLevelInterface {
 
     public org.apache.cassandra.thrift.ConsistencyLevel getThrift();
 
-    public com.netflix.astyanax.model.ConsistencyLevel  getAstyanax();
+    public com.datastax.driver.core.ConsistencyLevel    getDatastax();
 }

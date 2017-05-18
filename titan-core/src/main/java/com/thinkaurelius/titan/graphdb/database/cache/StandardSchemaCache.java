@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
 import com.thinkaurelius.titan.graphdb.idmanagement.IDManager;
 import com.thinkaurelius.titan.graphdb.relations.EdgeDirection;
 import com.thinkaurelius.titan.graphdb.types.system.BaseKey;
@@ -46,7 +47,9 @@ public class StandardSchemaCache implements SchemaCache {
     private final Cache<String,Long> typeNamesBackup;
 
     private volatile ConcurrentMap<Long,EntryList> schemaRelations;
+    private volatile ConcurrentMap<Long, MyEntryList> edgeSchemaRelations;
     private final Cache<Long,EntryList> schemaRelationsBackup;
+    private final Cache<Long, MyEntryList> edgeSchemaRelationsBackup;
 
     public StandardSchemaCache(final StoreRetrieval retriever) {
         this(MAX_CACHED_TYPES_DEFAULT,retriever);
@@ -67,8 +70,13 @@ public class StandardSchemaCache implements SchemaCache {
         schemaRelationsBackup = CacheBuilder.newBuilder()
                 .concurrencyLevel(CONCURRENCY_LEVEL).initialCapacity(INITIAL_CACHE_SIZE *CACHE_RELATION_MULTIPLIER)
                 .maximumSize(maxCachedRelations).build();
+        edgeSchemaRelationsBackup = CacheBuilder.newBuilder()
+                .concurrencyLevel(CONCURRENCY_LEVEL).initialCapacity(INITIAL_CACHE_SIZE *CACHE_RELATION_MULTIPLIER)
+                .maximumSize(maxCachedRelations).build();
 //        typeRelations = new ConcurrentHashMap<Long, EntryList>(INITIAL_CAPACITY*CACHE_RELATION_MULTIPLIER,0.75f,CONCURRENCY_LEVEL);
         schemaRelations = new NonBlockingHashMapLong<EntryList>(INITIAL_CAPACITY*CACHE_RELATION_MULTIPLIER); //TODO: Is this data structure safe or should we go with ConcurrentHashMap (line above)?
+        edgeSchemaRelations = new NonBlockingHashMapLong<MyEntryList>(INITIAL_CAPACITY*CACHE_RELATION_MULTIPLIER); //TODO: Is this data structure safe or should we go with ConcurrentHashMap (line above)?
+
     }
 
 
@@ -162,7 +170,47 @@ public class StandardSchemaCache implements SchemaCache {
         return entries;
     }
 
-//    @Override
+    @Override
+    public MyEntryList getEdgeSchemaRelations(long schemaId, BaseRelationType type, Direction dir) {
+        assert IDManager.isSystemRelationTypeId(type.longId()) && type.longId()>0;
+        Preconditions.checkArgument(IDManager.VertexIDType.Schema.is(schemaId));
+        Preconditions.checkArgument((Long.MAX_VALUE>>>(SCHEMAID_TOTALFORW_SHIFT-SCHEMAID_BACK_SHIFT))>= schemaId);
+
+        int edgeDir = EdgeDirection.position(dir);
+        assert edgeDir==0 || edgeDir==1;
+
+        final long typePlusRelation = getIdentifier(schemaId,type,dir);
+        ConcurrentMap<Long, MyEntryList> types = edgeSchemaRelations;
+        MyEntryList entries;
+        if (types==null) {
+            entries = edgeSchemaRelationsBackup.getIfPresent(typePlusRelation);
+            if (entries==null) {
+                entries = retriever.retrieveEdgeSchemaRelations(schemaId, type);
+                if (!entries.isEmpty()) { //only cache if type exists
+                    edgeSchemaRelationsBackup.put(typePlusRelation, entries);
+                }
+            }
+        } else {
+            entries = types.get(typePlusRelation);
+            if (entries==null) { //Retrieve it
+                if (types.size()> maxCachedRelations) {
+                    /* Safe guard against the concurrent hash map growing to large - this would be a VERY rare event
+                    as it only happens for graph databases with thousands of types.
+                     */
+                    schemaRelations = null;
+                    return getEdgeSchemaRelations(schemaId, type, dir);
+                } else {
+                    //Expand map
+                    entries = retriever.retrieveEdgeSchemaRelations(schemaId, type);
+                    types.put(typePlusRelation,entries);
+                }
+            }
+        }
+        assert entries!=null;
+        return entries;
+    }
+
+    //    @Override
 //    public void expireSchemaName(final String name) {
 //        ConcurrentMap<String,Long> types = typeNames;
 //        if (types!=null) types.remove(name);

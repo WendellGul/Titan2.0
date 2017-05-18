@@ -44,8 +44,6 @@ public interface InternalRelation extends TitanRelation, InternalElement {
      */
     public int getLen();
 
-
-
     public <O> O getValueDirect(PropertyKey key);
 
     public void setPropertyDirect(PropertyKey key, Object value);

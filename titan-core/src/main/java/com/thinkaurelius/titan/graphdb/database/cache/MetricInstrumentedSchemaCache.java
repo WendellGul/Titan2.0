@@ -1,6 +1,7 @@
 package com.thinkaurelius.titan.graphdb.database.cache;
 
 import com.thinkaurelius.titan.diskstorage.EntryList;
+import com.thinkaurelius.titan.diskstorage.MyEntryList;
 import com.thinkaurelius.titan.diskstorage.util.CacheMetricsAction;
 import com.thinkaurelius.titan.graphdb.configuration.GraphDatabaseConfiguration;
 import com.thinkaurelius.titan.graphdb.transaction.StandardTitanTx;
@@ -33,6 +34,12 @@ public class MetricInstrumentedSchemaCache implements SchemaCache {
                 incAction(METRICS_RELATIONS,CacheMetricsAction.MISS);
                 return retriever.retrieveSchemaRelations(schemaId, type, dir);
             }
+
+            @Override
+            public MyEntryList retrieveEdgeSchemaRelations(long schemaId, BaseRelationType type) {
+                incAction(METRICS_RELATIONS,CacheMetricsAction.MISS);
+                return retriever.retrieveEdgeSchemaRelations(schemaId, type);
+            }
         });
     }
 
@@ -50,6 +57,12 @@ public class MetricInstrumentedSchemaCache implements SchemaCache {
     public EntryList getSchemaRelations(long schemaId, BaseRelationType type, Direction dir) {
         incAction(METRICS_RELATIONS,CacheMetricsAction.RETRIEVAL);
         return cache.getSchemaRelations(schemaId, type, dir);
+    }
+
+    @Override
+    public MyEntryList getEdgeSchemaRelations(long schemaId, BaseRelationType type, Direction dir) {
+        incAction(METRICS_RELATIONS,CacheMetricsAction.RETRIEVAL);
+        return cache.getEdgeSchemaRelations(schemaId, type, dir);
     }
 
     @Override

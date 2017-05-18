@@ -1,8 +1,6 @@
 package com.thinkaurelius.titan.graphdb.database.idhandling;
 
-import com.thinkaurelius.titan.diskstorage.ReadBuffer;
-import com.thinkaurelius.titan.diskstorage.StaticBuffer;
-import com.thinkaurelius.titan.diskstorage.WriteBuffer;
+import com.thinkaurelius.titan.diskstorage.*;
 import com.thinkaurelius.titan.diskstorage.util.BufferUtil;
 import com.thinkaurelius.titan.diskstorage.util.StaticArrayBuffer;
 import com.thinkaurelius.titan.diskstorage.util.WriteByteBuffer;
@@ -20,6 +18,9 @@ public class IDHandler {
 
     public static final StaticBuffer MIN_KEY = BufferUtil.getLongBuffer(0);
     public static final StaticBuffer MAX_KEY = BufferUtil.getLongBuffer(-1);
+
+    public static final long MIN_KEY_LONG = 0L;
+    public static final long MAX_KEY_LONG = Long.MAX_VALUE;
 
     public static enum DirectionID {
 
@@ -52,6 +53,10 @@ public class IDHandler {
             }
         }
 
+        public int getId() {
+            return id;
+        }
+
         public Direction getDirection() {
             switch(this) {
                 case PROPERTY_DIR:
@@ -73,7 +78,7 @@ public class IDHandler {
             return forId((relationType << 1) + direction);
         }
 
-        private static DirectionID forId(int id) {
+        public static DirectionID forId(int id) {
             switch(id) {
                 case 0: return PROPERTY_DIR;
                 case 2: return EDGE_OUT_DIR;
@@ -126,6 +131,13 @@ public class IDHandler {
         return new RelationTypeParse(typeId,dirID);
     }
 
+    public static RelationTypeParse readRelationType(MyEntry data) {
+        if(data instanceof EdgeEntry)
+            return new RelationTypeParse(data.getColumn(), DirectionID.forId(((EdgeEntry) data).getDirectionId()));
+        else
+            return new RelationTypeParse(data.getColumn(), DirectionID.PROPERTY_DIR);
+    }
+
     public static class RelationTypeParse {
 
         public final long typeId;
@@ -153,6 +165,28 @@ public class IDHandler {
         byte[] arr = new byte[1];
         arr[0] = (byte) (prefix << (Byte.SIZE - PREFIX_BIT_LEN));
         return new StaticArrayBuffer(arr);
+    }
+
+    public static int[] getEdgeBounds(RelationCategory type, boolean systemTypes) {
+        int start, end;
+        switch (type) {
+            case PROPERTY:
+                start = DirectionID.PROPERTY_DIR.getId();
+                end = start;
+                break;
+            case EDGE:
+                start = DirectionID.EDGE_OUT_DIR.getId();
+                end = start;
+                break;
+            case RELATION:
+                start = DirectionID.PROPERTY_DIR.getId();
+                end = DirectionID.EDGE_OUT_DIR.getId();
+                break;
+            default:
+                throw new AssertionError("Unrecognized type:" + type);
+        }
+        end++;
+        return new int[]{start, end};
     }
 
     public static StaticBuffer[] getBounds(RelationCategory type, boolean systemTypes) {

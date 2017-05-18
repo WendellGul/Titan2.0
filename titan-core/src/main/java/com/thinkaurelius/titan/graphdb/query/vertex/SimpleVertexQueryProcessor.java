@@ -3,8 +3,9 @@ package com.thinkaurelius.titan.graphdb.query.vertex;
 import com.carrotsearch.hppc.LongArrayList;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.*;
-import com.thinkaurelius.titan.core.*;
+import com.google.common.collect.Iterables;
+import com.thinkaurelius.titan.core.TitanRelation;
+import com.thinkaurelius.titan.core.VertexList;
 import com.thinkaurelius.titan.diskstorage.Entry;
 import com.thinkaurelius.titan.diskstorage.EntryList;
 import com.thinkaurelius.titan.diskstorage.keycolumnvalue.SliceQuery;
@@ -19,7 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.util.*;
+import java.util.Iterator;
 
 /**
  * This is an optimization of specifically for {@link VertexCentricQuery} that addresses the special but

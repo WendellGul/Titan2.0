@@ -62,4 +62,8 @@ public class KCVSManagerProxy implements KeyColumnValueStoreManager {
         manager.mutateMany(mutations,txh);
     }
 
+    @Override
+    public void mutateEdge(Map<String, Map<Long, KCVEdgeMutation>> mutations, StoreTransaction txh) throws BackendException {
+        manager.mutateEdge(mutations, txh);
+    }
 }
